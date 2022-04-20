@@ -11,6 +11,16 @@
 1. Mending XSS
 1. localStorage all the way... or is it?
 1. Alternatives
+1. Introducing OAuth. "That's not how it's supposed to work."
+1. Authorization Code flow
+1. Implicit flow
+1. The case against Implicit flow
+1. Authorization Code flow with PCKE
+1. Refresh token
+1. Refresh token rotation
+
+"localStorage all the way... or is it?" -> This talks about the problem with
+JWT. Is was not intended for security.
 
 ## To be researched
 
@@ -29,8 +39,11 @@ OAuth 2.0:
       [link](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-browser-based-apps#section-6.2)
 - [ ] OAuth 2.1?
 - [ ] Is `state` has a role of CSRF prevention when using PCKE?
+- [ ] OpenID Connect
 
 ## Research note
+
+### Refresh token
 
 Auth0 has this to say about protecting refresh token in SPAs:
 [link](https://auth0.com/blog/refresh-tokens-what-are-they-and-when-to-use-them/#When-to-Use-Refresh-Tokens)
@@ -52,6 +65,25 @@ Refresh token rotation lifespan:
 > defined long lifespan of a refresh token is cut short with refresh token
 > rotation. The refresh is only valid within the lifespan of the access token,
 > which would be short-lived.
+
+[Authorization server] Best practice when using refresh tokens:
+
+> If the authorization server wishes to allow JavaScript apps to use refresh
+> tokens, then they must also follow the best practices outlined in “OAuth 2.0
+> Security Best Current Practice” and “OAuth 2.0 for Browser-Based Apps“, two
+> recent documents adopted by the OAuth Working Group. Specifically, refresh
+> tokens must be valid for only one use, and the authorization server must issue
+> a new refresh token each time a new access token is issued in response to a
+> refresh token grant. This provides the authorization server a way to detect if
+> a refresh token has been copied and used by an attacker, since in normal
+> operation of an app a refresh token would be used only once.
+>
+> Refresh tokens must also either have a set maximum lifetime, or expire if they
+> are not used within some amount of time. This is again another way to help
+> mitigate the risks of a stolen refresh token.
+> [link](https://www.oauth.com/oauth2-servers/single-page-apps/security-considerations/)
+
+---
 
 OAuth:
 
@@ -109,7 +141,7 @@ The "flaws":
 
   Well, too insecure what?
 
-  The Implicit flow **could** be made *relatively secure* (as proven later) **if
+  The Implicit flow **could** be made _relatively secure_ (as proven later) **if
   done correctly**, meaning they could work but there is a specific amount of
   effort to achieve that. But that's not impossible. And **relatively secure**
   is the keyword.
@@ -165,7 +197,7 @@ The "flaws":
     not some other (potentially malicious) SPA. This is necessary because in
     Implicit flow, we can't verify if the Token receiver was indeed requested
     the token.
-    
+
     For example, a victim logs in googlefake.com using Google OAuth Implicit
     flow, and then googlefake.com uses that access token to log into google.com.
     If google.com is not checking that the token is given to googlefake.com
@@ -178,7 +210,6 @@ The "flaws":
   - **However**, we should also do the same for the Code flow. If the Code is
     for the googlefake.com, then the same compromise happens, as the access
     token granted is for googlefake.com.
-    
   - We can do that using the `state` parameter. (demonstrates the Code flow &
     the Implicit flow similarity)
 
@@ -222,7 +253,7 @@ The **real** Implicit flow flaws:
 
     We can think of it as if the client secret is per-request basis. For each
     request, there is a different client secret.
-  
+
   If we registered an URL for redirection, but that URL is compromised, then in
   the Implicit flow we could do nothing more. The token is compromised. Whether
   we can assures that the URL wouldn't be compromised or not is, again, an open
@@ -230,3 +261,85 @@ The **real** Implicit flow flaws:
 
 Although the flaws could be prevented (EXCEPT the "client authentication" flaw),
 it is still a hassle, and there could still be human errors.
+
+---
+
+Storing tokens: [link](https://www.oauth.com/oauth2-servers/single-page-apps/security-considerations/)
+
+> Generally, the browser's LocalStorage API is the best place to store this data
+> as it provides the easiest API to store and retrieve data and is about as
+> secure as you can get in a browser. The downside is that any scripts on the
+> page, even from different domains such as your analytics or ad network, will
+> be able to access the LocalStorage of your application. This means anything
+> you store in LocalStorage is potentially visible to third-party scripts on
+> your page.
+>
+> Because of the risks of data leakage from third-party scripts, it is extremely
+> important to have a good Content-Security Policy configured for your app so
+> that you can be more confident that arbitrary scripts aren't able to run in
+> the application. A good document on configuring a Content Security Policy is
+> available from OWASP at
+> https://owasp.org/www-project-cheat-sheets/cheatsheets/Content_Security_Policy_Cheat_Sheet.html
+
+Consider "handling OAuth flow on the backend", i.e. use a traditional web app
+with session.
+[link](https://www.oauth.com/oauth2-servers/single-page-apps/security-considerations/)
+
+[OAuth 2.0 for Browser-Based Apps](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-browser-based-apps)
+
+[OAuth 2.0 Security Best Current
+Practice](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-security-topics)
+
+---
+
+The concerns flow of a client-side app should be:
+
+Securely obtain the tokens -> Store the tokens -> Cares about the tokens'
+lifetime
+
+Obtaining the token: Using OAuth, or some custom authorization system.
+
+Store the tokens: `localStorage`.
+
+Cares about the tokens' lifetime: The purpose is keeping the user logged in for
+as long as possible, without a re-login. That involves using refresh token,
+because using just the access token is problematic in that if it's lost, it's
+hard to handle the aftermath. The same can be said to losing a refresh token, so
+Refresh token rotation is the solution, and it's the current best practice.
+
+---
+
+Question: Why can't access token just also act as a refresh token?
+
+[link](https://stackoverflow.com/a/39003201)
+
+I mean, it could still rotates like the Refresh token rotation, so if any access
+token is used twice, the entire family of access token could just also be
+invalidated.
+
+Answer:
+
+The most crucial reason is that the Access Token is exchanged with the Resource
+Server (an API), but the Refresh Token is exchanged only with the Authorization
+Server, like Google.
+
+The Resource Server only has their hands on a short-lived Access Token, so if
+the Resource Server's implementation is flawed and leaks the Access Token, for
+example:
+
+> query param in a log file on an insecure resource server, beta or poorly coded
+> resource server app, JS SDK client on a non https site that puts the
+> access_token in a cookie, etc
+>
+> [link](https://mailarchive.ietf.org/arch/msg/oauth/vSmJ0zjQzZFjeFbRz_qpvjfpAeU/)
+
+... then they can only leak the short-lived Access Token. If this were to be a
+Refresh Token instead, as in the case of an Access Token also being a Refresh
+Token, then instead of a short 10-minute window of time of exploit, now the
+attacker could have a much longer exploit time window of a Refresh Token,
+assuming that the user never use that Refresh Token again in the meantime (to
+invalidate it).
+
+So, the Resource Server is not trusted to hold on to a more valuable Refresh
+Token. They only have the user's authorization for a short time, say, 10
+minutes. Don't send your Refresh Token there.
