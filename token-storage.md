@@ -200,19 +200,25 @@ The **real** Implicit flow flaws:
   That's true. Implicit flow **implicitly assumes** that the receiver is indeed
   the requester. If the token is hijacked, i.e. the redirect URL is compromised
   and the attacker receives the token instead, then the token is indeed
-  compromised. The malicious target app need not use the `state` parameter, the
-  access token is there to use.
+  compromised.
 
-  However, this statement is a little ambiguous:
+  Remember that the `state` parameter only has a role of preventing the use of
+  the wrong token in the legitimate, original app. If the token is gone to the
+  incorrect target, that's a gone token, and they need not care about the
+  `state`.
+
+  However, this "Lack of client authentication" statement is a little ambiguous.
+  You may ask "Isn't Client-side apps cannot store any secrets?"
 
   - A client-side app doesn't have a fixed client secret, no matter what flow
     you use, including the Code flow, because client-side apps could not store
     anything securely. In a mobile + Code flow scenario, if the attacker's app
     gets the Authorization Code, they could still go to exchange for an access
-    token. This flaw is solved with PCKE.
-  - A more accurate statement is "Lack of client secret". We assure that the
-    receiver is indeed the requester in an SPA using PCKE. In PCKE, only the
-    true requester will be able to exchange the code for an access token.
+    token. This flaw is solved with PCKE. In this sense, the accurate statement
+    is "Lack of client secret".
+  - We assure that the receiver is indeed the requester in an SPA using PCKE. In
+    PCKE, only the true requester will be able to exchange the code for an
+    access token. This is the real "client authentication".
 
     We can think of it as if the client secret is per-request basis. For each
     request, there is a different client secret.
