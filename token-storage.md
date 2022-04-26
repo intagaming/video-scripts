@@ -58,7 +58,7 @@ be somewhat similar.
 
 I'll briefly show you the sources where storing tokens in localStorage is
 recommended. But I'm not going to rely on these sources for my answer, because
-they don't provide any reason to do so. I do, so I explain it my own way.
+they don't consider any alternatives. I do, so I explain it my own way.
 
 _shows the sources_
 
@@ -85,24 +85,25 @@ of sending back to you the Token, the web server would store the Token in a
 Cookie, and let the browser hold that for you.
 
 It sounds just like localStorage, but the client-side application don't have to
-write logics to store the token. For example if Facebook stores the Token in a
-Cookie, then Facebook don't have to write code to send the token along with the
-requests; the Browser would do that automatically.
+write logics to store or send the token. For example if Facebook was to store
+the Token in a Cookie, then Facebook don't have to write code to send the token
+along with the requests; the Browser would do that automatically.
 
 The Browser only sends the Cookie to the Facebook API, so you don't have to
 worry it going to some malicious place.
 
-So, why is there two ways to accomplish the same thing?
+So, why is there two ways of accomplishing the same thing?
 
 ### Vulnerabilities: XSS
 
 To access and modify the data in localStorage, you use JavaScript. It's the
 language that runs what you call client-side applications on the web.
 
-The first web exploit is called Cross-Site Scripting, or XSS. Basically, it's
-when there is a piece of malicious JavaScript running on the website. This
-malicious script can do a lot of things. One of the things that they can do is
-access localStorage and send the token back to the attacker to use.
+The first vulnerability that we care about is called Cross-Site Scripting, or
+XSS. Basically, it's when there is a piece of malicious JavaScript running on
+the website. This malicious script can do a lot of things. One of the things
+that they can do is accessing localStorage and send the token back to the
+attacker to use.
 
 That's the reason why there is another place to store the token, Cookie.
 
@@ -162,9 +163,9 @@ malicious requests if Facebook has XSS.
 Cookie is supposed to mitigate XSS, and true, the data in the Cookie is not
 exposed, but the Cookie can still be used nonetheless.
 
-Therefore, although localStorage has to mitigate XSS, Cookie in the other hands
-has to mitigate both XSS **and** CSRF. Two vulnerability is worse than one,
-right?
+Therefore, although using localStorage requires you to mitigate XSS, Cookie in
+the other hands requires you to mitigate both XSS **and** CSRF. Two
+vulnerability is worse than one, right?
 
 ### Defending `HttpOnly` Cookie
 
@@ -173,8 +174,7 @@ There are still arguments that defend HttpOnly Cookie, like:
 > If the token is exposed to the JavaScript like when you're using localStorage,
 > then the attacker can store the token to perform attacks later on, even after
 > the browser is closed, because XSS can only run while the browser is running.
-> Using Cookies would only allow attacks while the browser is running. That's
-> better, right?
+> Using Cookies would prevent that. That's better, right?
 
 To understand how the world's doing this Token storage thing, you have to
 understand a real example. The Facebook example used until now is a hypothetical
@@ -208,13 +208,13 @@ Let's introduce another service, YouTube. You log in your Google account to use
 YouTube. You **authorize** YouTube to access your YouTube data, but not the
 Gmail data. Similarly, you only authorize Google Calendar to manage calendar,
 not uploading videos to YouTube. YouTube, in OAuth's terms, is known as the
-Client.
+Client, as in the Client of the Google Authorization Server.
 
 When using third party applications like Spotify, if you wish to login to
 Spotify using a Google account, you would authenticate yourself to the
 Authorization Server (in this case, Google), and there will be a screen for you
-to grant authorizations to Spotify, or in other words, what Spotify can do with
-your Google account.
+to grant authorizations to Spotify, or in other words, saying what Spotify can
+do with your Google account.
 
 [...]
 
@@ -267,24 +267,25 @@ Token to get a new Access Token. But, in doing so, that leaked Refresh Token is
 invalidated, and guess who is still using that invalidated Refresh Token? That's
 right, your browser.
 
-So, the Refresh Token gets leaked and used. You visit Facebook, and Facebook
-uses the Access Token to get your news feed. The Access Token might only live
-for 30 minutes and it's probably past that point, so Facebook uses the leaked
-Refresh Token to get a new Access Token. However, that leaked Refresh Token has
-already been invalidated, so every tokens associated with your account would be
-invalidated, including every tokens that the attacker had. You are then required
-to log in again.
+So, the Refresh Token gets leaked and get used by an attacker. You visit
+Facebook, and Facebook uses the Access Token to get your news feed. The Access
+Token might only live for 30 minutes and it's probably already past that point,
+so Facebook uses the leaked Refresh Token to get a new Access Token. However,
+that leaked Refresh Token has already been invalidated, so every tokens
+associated with your account would be invalidated, including every tokens that
+the attacker had. You are then required to log in again.
 
 This is called Refresh Token Rotation. It is a measure to log everybody out when
 a Refresh Token is leaked. You could say that it helps to reduce the damage if
 the Refresh Token is to be leaked.
 
-If you (and by "you" I mean the Authorization Server like Google) are using
-short-lived Access Token, long-lived Refresh Token and Refresh Token Rotation,
-then it's currently the agreed-upon best practice when it comes to Authorization
-on the internet. If the Access Token is leaked, it would only be available for a
-short time. If the Refresh Token is leaked, then Refresh Token Rotation helps to
-minimize the damage of the leakage.
+If you (and by "you" I mean the Authorization Server like Google, **and** also
+**you** as a Google Authorization Server user) are using short-lived Access
+Token, long-lived Refresh Token and Refresh Token Rotation, then it's currently
+the agreed-upon best practice when it comes to Authorization on the internet. If
+the Access Token is leaked, it would only be available for a short time. If the
+Refresh Token is leaked, then Refresh Token Rotation helps to minimize the
+damage of the leakage.
 
 So, what does all of this have to do with where to store the tokens on the
 browser?
@@ -359,8 +360,9 @@ they should do next is revoke access to that old Device, even if it has not been
 used recently, which in turn invalidating all Access Tokens & Refresh Tokens
 that the attacker might get hold of.
 
-If there's no observable damage, then they would assume that this is a machine
-error and wouldn't report to you, the developer.
+If there's nothing wrong going on with their account (like their account
+suddenly sending malicious messages), then they would assume that the "5 mins
+ago" part is a machine error and wouldn't report to you, the developer.
 
 To be fair, little people actually care enough to go to that Devices page, so
 there's another way, which is wait for the damage to arrive.
@@ -371,28 +373,32 @@ to some interested party, right? Then when the damage is done, the influencer
 would sue the Facebook company for leaking inbox data, after that you'd
 definitely know that you're f'ed. Would this be preventable have you used
 HttpOnly Cookie to store the tokens? Your service, Facebook, still has an XSS
-vulnerability, and it's very unlikely that there are no damage being done after
-a year. It's even less likely that every victim just switch laptop and lost
-their Refresh Token.
+vulnerability, and it's very unlikely that there are no damage being done via
+that XSS vulnerability after a year. It's even less likely that every victim
+just switch laptop and lost their Refresh Token.
 
-If you, the developer of Facebook, thinks that:
+If you, the developer of Facebook, think that:
 
 1. It takes a very long time for you to know that your service has XSS (which is
-   very unlikely)
-2. In the case XSS attacks happen and tokens get leaked, you don't have enough
-   victims to trigger the Refresh Token Rotation system
+   very unlikely if you care about your service)
+2. In the case XSS attacks happen and tokens get leaked, the Refresh Token
+   Rotation protection system doesn't help to let you - the developer - know
+   that your service is f'ed
+3. There are attacks against your service that the attacker is interested in
+   doing that involves knowing the Access Token or Refresh Token
 
-Then go ahead and use HttpOnly Cookie. But did you know that you are not the
-person who can change the code of the Google Authorization Server? If you want
-to set a Cookie on the user's Browser, then the Cookie (in this case, the Token
-Cookie) must be set when the user's browser asks Google for an Access Token. You
-can't change that response, so you're left with using some kind of intermediate
-server to be able to do that. In fact, if you insist, let's dig in deeper to see
-what you need to do in order to implement this intermediate server.
+Then go ahead and use HttpOnly Cookie by all means. But did you know that you
+are not the person who can change the code of the Google Authorization Server?
+If you want to set a Cookie on the user's Browser, then the Cookie (in this
+case, the Token Cookie) must be set when the user's browser asks Google for an
+Access Token. Google doesn't do that. You can't change that response, so you're
+left with using some kind of intermediate server to be able to do that. In fact,
+if you insist, let's dig in deeper to see what you need to do in order to
+implement this intermediate server.
 
 ### HttpOnly Cookie's implementation with Google OAuth
 
-Let's switch to the Spotify example.
+Let's switch to the Spotify example. You are the Spotify developer.
 
 So, here is the intermediate server, which would set the cookie to the user's
 browser. So this server must know about the user's Access Token & Refresh Token
@@ -405,23 +411,32 @@ Token and the Refresh Token, and then response with the Access Token and Refresh
 Token set in a HttpOnly Cookie.
 
 Then, on the Spotify API, you would take the token out from the Token Cookie and
-use them to authorize the request. Mission accomplished.
+use them to authorize the request. Mission accomplished, simple enough.
 
-Now, this intermediate server is another point of failure in the system. This
-server comes with a plethora of its own security and availability concerns. It
-would take some effort to get this server running; it's not just an empty
-server, it has the logic to do the Google OAuth token exchange, which is usually
-done through some kind of Google OAuth SDK.
+Now, using this intermediate server is kinda an anti pattern, because the
+Authorization Code flow that's used for your Spotify app is supposed to be
+between the Public Client (the Spotify app on your browser) and Google, but now
+another party is also getting involved. And if you know OAuth, you would also
+know that the Refresh Token is strictly only allowed to be exchanged between the
+Client and the Authorization Server, so that's not good. But you insisted to use
+Cookie anyway, right?
 
-And you must also have the authority to modify the Spotify API, which if you
-don't have consent to do, then this plan can go into the bin.
+And if you don't have the authority to modify the Spotify API **or** your
+service Spotify uses any third party API that don't support Cookie and requires
+the Google access token explicitly, then this plan can go into the bin.
 
 As an added bonus, the Spotify app on Android or iOS doesn't have Cookie, so the
-Spotify API now has to fallback to the normal way. Is this an effort or not?
+Spotify API now has to fallback to the normal way. Is this an effort or no?
 
 ### Conclusion
 
-... mentions the mobile api thing
+So there you have it. 2 methods of storing tokens on the browser, and you decide
+if Cookie is worth your effort.
+
+Don't forget that Mobile applications don't have Cookie, so if your API is
+something like the Spotify API, I hope the choice is easy for you.
+
+_shows Spotify Web API authentication section image_
 
 ---
 
