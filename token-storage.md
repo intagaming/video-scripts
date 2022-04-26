@@ -2,33 +2,440 @@
 
 ## Chapters
 
-1. Context
 1. How client-side apps authenticate with APIs
 1. localStorage - the hated one
 1. Cookie is taking all of the cookies
-1. The vulnerabilities
+1. Vulnerabilities
 1. Cookie's double the trouble
 1. Mending XSS
 1. localStorage all the way... or is it?
-1. Alternatives
 1. Introducing OAuth. "That's not how it's supposed to work."
 1. Authorization Code flow
-1. Implicit flow
-1. The case against Implicit flow
-1. Authorization Code flow with PCKE
 1. Refresh token
 1. Refresh token rotation
+1. Why you can use localStorage when using OAuth
 
 "localStorage all the way... or is it?" -> This talks about the problem with
 JWT. Is was not intended for security.
 
+- Seems like this topic is out of scope of this video.
+
+## Script
+
+### How client-side apps authenticate with APIs
+
+Here is the Facebook app, and here is the Facebook API.
+
+How do the Facebook app communicates with the Facebook API?
+
+When you post something, how does the Facebook API knows that it is **you**, who
+has **this name**?
+
+Usually, for a client-side application to communicate with an API, the
+client-side app would need a permission to access data. In its most primitive
+form, the user would enter the username and password, they get sent to the API,
+and the API gives back "the permission to access the user data". It's like a
+key, and it has a name, it's called a Token, specifically, Access Token.
+
+Using this token, the client-side app could access and modify the data via the
+API. This token represents the permission that the user gave the client-side app
+to access and modify the user's data.
+
+For example, you logged into Facebook. Facebook API gives you back an Access
+Token that represents **you**. The Facebook app would use this token to post and
+comment as **you**.
+
+That also means that, if you don't store this Access Token carefully, it could
+be hacked, and your account is compromised. _inserts some illustration about
+account compromise_
+
+Question is, where do you securely store this token?
+
+This video specifically focuses on web applications. Mobile applications should
+be somewhat similar.
+
+### localStorage - the hated one
+
+I'll briefly show you the sources where storing tokens in localStorage is
+recommended. But I'm not going to rely on these sources for my answer, because
+they don't provide any reason to do so. I do, so I explain it my own way.
+
+_shows the sources_
+
+On the web, there's this thing you can store data in, called localStorage.
+
+It's a key-value storage of the browser that's supposed to store data, and it
+won't be deleted after your browser closes. That's it. It's very easy to use.
+
+Facebook could store the Access Token here. After that, each time you visit
+Facebook, it would use the stored Access Token, and you don't have to log in
+again.
+
+But there exists another place to store the Access Token.
+
+### Cookies is taking all of the cookies
+
+Also on the web is the idea of "Cookies". A Cookie is a piece of data that the
+web server would save on the browser.
+
+_inserts Cookie saving to the browser upon receiving the response_
+
+Back to the Primitive flow. After you enter your username and password, instead
+of sending back to you the Token, the web server would store the Token in a
+Cookie, and let the browser hold that for you.
+
+It sounds just like localStorage, but the client-side application don't have to
+write logics to store the token. For example if Facebook stores the Token in a
+Cookie, then Facebook don't have to write code to send the token along with the
+requests; the Browser would do that automatically.
+
+The Browser only sends the Cookie to the Facebook API, so you don't have to
+worry it going to some malicious place.
+
+So, why is there two ways to accomplish the same thing?
+
+### Vulnerabilities: XSS
+
+To access and modify the data in localStorage, you use JavaScript. It's the
+language that runs what you call client-side applications on the web.
+
+The first web exploit is called Cross-Site Scripting, or XSS. Basically, it's
+when there is a piece of malicious JavaScript running on the website. This
+malicious script can do a lot of things. One of the things that they can do is
+access localStorage and send the token back to the attacker to use.
+
+That's the reason why there is another place to store the token, Cookie.
+
+Remember that Cookies are data that are stored on the browser, just like
+localStorage? It can even be accessed via JavaScript. There is a catch: if a
+Cookie is flagged `HttpOnly`, then it cannot be accessed by using JavaScript.
+
+When Facebook makes a request, the browser sends along the `HttpOnly` Cookie,
+and the request is approved.
+
+Because `HttpOnly` Cookie cannot be accessed by JavaScript, if an XSS attack
+happens, the malicious script don't get to know the Access Token. However, it
+presents another vulnerability.
+
+### Vulnerabilities: CSRF
+
+Cross-Site Request Forgery, or CSRF, is an attack that revolves around Cookie.
+For example, if you visit a malicious website, that website could "forge" a
+request that resembles your Facebook posting request, and send that malicious
+request to the Facebook API. If your browser sends along the Cookie that
+contains the Access Token, then you will post something that you don't want.
+
+Fortunately, there's a protection coming from the Browser, which is the
+`SameSite` Cookie flag. When the malicious site makes a request, the request is
+coming from the malicious site, not facebook.com. So, if the Cookie's `SameSite`
+is set to something like `Lax`, the Cookie won't be send by the Browser. There's
+multiple catches that is not important right now. If you want to dig deeper,
+take a look at the MDN documentation.
+
+The important thing is, `SameSite` can mitigate the CSRF attack.
+
+So, Cookie can protect your token from XSS and CSRF. Or is it?
+
+### Cookie's double the trouble
+
+According to OWASP's Cheatsheet:
+
+> Remember that any Cross-Site Scripting (XSS) can be used to defeat all CSRF
+> mitigation techniques!
+
+So if your website has an XSS vulnerability, then your CSRF mitigation will not
+work. That would make your Token Cookie to be sent along with the malicious
+request before.
+
+But how?
+
+It's simple. The XSS vulnerability allows malicious scripts to run on the
+infected website. Let's assume Facebook has an XSS vulnerability. This malicious
+script would send the malicious posting request to Facebook like before. But
+`SameSite=Lax`, which is the CSRF mitigation measure, now doesn't work, because
+the request is made from the legit Facebook website. So, the Token Cookie is
+sent along with the request, and you posted an unwanted post.
+
+See, the attacker doesn't need to know the exact Token. They can still make
+malicious requests if Facebook has XSS.
+
+Cookie is supposed to mitigate XSS, and true, the data in the Cookie is not
+exposed, but the Cookie can still be used nonetheless.
+
+Therefore, although localStorage has to mitigate XSS, Cookie in the other hands
+has to mitigate both XSS **and** CSRF. Two vulnerability is worse than one,
+right?
+
+### Defending `HttpOnly` Cookie
+
+There are still arguments that defend HttpOnly Cookie, like:
+
+> If the token is exposed to the JavaScript like when you're using localStorage,
+> then the attacker can store the token to perform attacks later on, even after
+> the browser is closed, because XSS can only run while the browser is running.
+> Using Cookies would only allow attacks while the browser is running. That's
+> better, right?
+
+To understand how the world's doing this Token storage thing, you have to
+understand a real example. The Facebook example used until now is a hypothetical
+one. I don't know exactly how Facebook stores tokens on your browser, but I
+would comfortably say that if they were to follow the industry standard, then
+the answer is, 9 out of 10 times, localStorage, unless they have a very
+compelling reason not to. I'll show you why.
+
+### OAuth
+
+So there's this thing called OAuth. You may have heard before. You may have used
+them before. It starts with something like this: _inserts Google OAuth login
+image_
+
+Let's ease you in.
+
+Authentication refers to the process of proving who you are. Like, who are you,
+what is your name.
+
+Authorization refers to what you can do.
+
+Authentication is like telling the guard a secret passphrase to get into the
+building. But without a badge, you can't go into any confidential room. The
+badge represents the Authorization.
+
+So, when you're entering your username and password, you are **authenticating**
+yourself to Google, saying that "Here is my account, and I own it. Now log me
+in." Google, in OAuth's terms, is known as the Authorization Service.
+
+Let's introduce another service, YouTube. You log in your Google account to use
+YouTube. You **authorize** YouTube to access your YouTube data, but not the
+Gmail data. Similarly, you only authorize Google Calendar to manage calendar,
+not uploading videos to YouTube. YouTube, in OAuth's terms, is known as the
+Client.
+
+When using third party applications like Spotify, if you wish to login to
+Spotify using a Google account, you would authenticate yourself to the
+Authorization Server (in this case, Google), and there will be a screen for you
+to grant authorizations to Spotify, or in other words, what Spotify can do with
+your Google account.
+
+[...]
+
+Then, after authenticating with Google and authorizing for the Spotify app about
+what Google data it can access, you will be redirected back to Spotify. In the
+background, Spotify receives a code from Google, called Authorization Code.
+Spotify uses this Code, sends it to Google, and get back an Access Token. The
+OAuth flow is complete.
+
+This OAuth flow is called the Authorization Code flow. I will be releasing
+another video talking about OAuth and how it works (trust me I've got a lot to
+tell about OAuth), but for now just get a basic idea of OAuth.
+
+### Refresh Token
+
+So, there is this thing in OAuth that you might have heard before, and that's a
+Refresh Token.
+
+Remember that after you login you would receive an Access Token? It had a
+not-short lifetime. Why is it not-short? Because you don't want your user to
+login again every 10 minutes, don't you? So it might be set to 7 days, or 30
+days, depending on the service.
+
+Now, OAuth presents this Refresh Token term, that refers to the token that you
+would use to get a new Access Token when it expires. If your 30-day Access Token
+expires, you can use your Refresh Token to get a new one that lasts another 30
+days. But that's not why it's invented to solve.
+
+When you log in, you will be issued an Access Token and a Refresh Token. The
+Access Token will be valid for a very short time, and the Refresh Token will be
+long lived. Why? Because if your Access Token gets leaked, it would only be
+usable for a short amount of time, minimizing the effect of the Access Token
+leakage.
+
+But what if the Refresh Token is leaked instead? Isn't that would mean the
+attacker now has infinite access to your account?
+
+### Refresh Token Rotation
+
+Every time a Refresh Token is used, it is immediately invalidated, and the
+Authorization Server gives you back a new Access Token **and** a new Refresh
+Token.
+
+Now, if you attempt to use the old Refresh Token, all of the Access Tokens and
+Refresh Tokens that were associated with your account would be immediately
+invalidated, and you are required to log in again. Why is this useful?
+
+Well, suppose your Refresh Token is leaked, and the attacker uses that Refresh
+Token to get a new Access Token. But, in doing so, that leaked Refresh Token is
+invalidated, and guess who is still using that invalidated Refresh Token? That's
+right, your browser.
+
+So, the Refresh Token gets leaked and used. You visit Facebook, and Facebook
+uses the Access Token to get your news feed. The Access Token might only live
+for 30 minutes and it's probably past that point, so Facebook uses the leaked
+Refresh Token to get a new Access Token. However, that leaked Refresh Token has
+already been invalidated, so every tokens associated with your account would be
+invalidated, including every tokens that the attacker had. You are then required
+to log in again.
+
+This is called Refresh Token Rotation. It is a measure to log everybody out when
+a Refresh Token is leaked. You could say that it helps to reduce the damage if
+the Refresh Token is to be leaked.
+
+If you (and by "you" I mean the Authorization Server like Google) are using
+short-lived Access Token, long-lived Refresh Token and Refresh Token Rotation,
+then it's currently the agreed-upon best practice when it comes to Authorization
+on the internet. If the Access Token is leaked, it would only be available for a
+short time. If the Refresh Token is leaked, then Refresh Token Rotation helps to
+minimize the damage of the leakage.
+
+So, what does all of this have to do with where to store the tokens on the
+browser?
+
+### OAuth and token storage
+
+Let's assume you are the developer of a service like Spotify.
+
+If a user of your service is a victim of a token leakage, chances are your
+service's website has an XSS vulnerability that has caused the tokens to be
+leaked.
+
+As I've proved to you, the attacker don't have to know the tokens in order to
+use them. If the attacker has XSS attacked your service (Spotify), they could
+rename the victim's playlist names to something malicious, or delete their
+playlists, all without knowing the tokens.
+
+Let's say your service is Facebook instead. They could send malicious messages
+to all of the victim's friends immediately, without snatching the token and send it
+somewhere. The damage is done immediately.
+
+XSS's malicious scripts can only be run when the browser is running. That's
+true, but next time the victim visits Facebook, the XSS vulnerability is still
+there, and the malicious script would have another chance of sending malicious
+messages.
+
+Okay, maybe the attacker also wants to access the victim's Facebook account even
+when the victim's browser is closed. So they send the Access Token and the
+Refresh Token to their email or machine or server somewhere.
+
+The access token is only available for a short time, so the attacker, if they
+want to maintain access to the victim's account, has to use the Refresh Token to
+obtain a new Access Token. That means the leaked Refresh Token is now
+invalidated. Now if the victim opens up the browser and visits Facebook, they
+would see that they are logged out, and at the same time, the attacker has also
+lost access to the victim's account.
+
+What if the victim never opens up their browser and visits Facebook?
+
+In that case, the attacker would have access to the victim's account for a very
+long time. Remember that you are the developer of Facebook, **not** the victim,
+so you rely on the victim to report to you about the attack. If the victim
+doesn't log in and realizes that their inboxes are now flooded with angry
+responses to the malicious messages, then you, the developer, has **no idea**
+that your service, Facebook, is f'ed.
+
+Just don't care about the "store tokens where" question at the moment. The fact
+that your service Facebook is f'ed is more important. And would you (the
+developer of Facebook) wish to know that your service is f'ed after 30 minutes
+or after a year? 'cause the thing is, if you just let the victim's token leaked,
+then it's easier to attack and you would know that your service, Facebook, is
+f'ed sooner.
+
+You may say "If the attacker has access to a very famous person on Facebook, and
+they just sit and sniff that influencer's inbox, then I, the developer, as well
+as the influencer wouldn't know that their account is compromised, right? Were I
+to have used HttpOnly Cookie, the attacker would not have access to the
+influencer's account all day everyday, correct?"
+
+Answer:
+
+Remember Refresh Token Rotation? After the access token expires, if the attacker
+were to use the leaked Refresh Token, **and** if the influencer still cares
+about their Facebook inbox and opens up their browser, then their account is
+logged out immediately. Well what if they don't, for example they switched
+laptop and don't have the leaked Refresh Token anymore?
+
+First off, immediately after abandoning their device, they should check their
+"Devices" page, which looks like this. If the leaked Access Token or Refresh
+Token is used, then it would show something like "Windows 10, 5 mins ago". What
+they should do next is revoke access to that old Device, even if it has not been
+used recently, which in turn invalidating all Access Tokens & Refresh Tokens
+that the attacker might get hold of.
+
+If there's no observable damage, then they would assume that this is a machine
+error and wouldn't report to you, the developer.
+
+To be fair, little people actually care enough to go to that Devices page, so
+there's another way, which is wait for the damage to arrive.
+
+If the attacker is just sitting observe the inbox and doesn't actually do any
+damage then that's really dumb of them, right? They should sell the information
+to some interested party, right? Then when the damage is done, the influencer
+would sue the Facebook company for leaking inbox data, after that you'd
+definitely know that you're f'ed. Would this be preventable have you used
+HttpOnly Cookie to store the tokens? Your service, Facebook, still has an XSS
+vulnerability, and it's very unlikely that there are no damage being done after
+a year. It's even less likely that every victim just switch laptop and lost
+their Refresh Token.
+
+If you, the developer of Facebook, thinks that:
+
+1. It takes a very long time for you to know that your service has XSS (which is
+   very unlikely)
+2. In the case XSS attacks happen and tokens get leaked, you don't have enough
+   victims to trigger the Refresh Token Rotation system
+
+Then go ahead and use HttpOnly Cookie. But did you know that you are not the
+person who can change the code of the Google Authorization Server? If you want
+to set a Cookie on the user's Browser, then the Cookie (in this case, the Token
+Cookie) must be set when the user's browser asks Google for an Access Token. You
+can't change that response, so you're left with using some kind of intermediate
+server to be able to do that. In fact, if you insist, let's dig in deeper to see
+what you need to do in order to implement this intermediate server.
+
+### HttpOnly Cookie's implementation with Google OAuth
+
+Let's switch to the Spotify example.
+
+So, here is the intermediate server, which would set the cookie to the user's
+browser. So this server must know about the user's Access Token & Refresh Token
+(in order to set the cookie). How?
+
+After the Authorization Code flow is complete, when the Google OAuth redirects
+the user back to Spotify with the Authorization Code, Spotify would send this
+code to the intermediate server. This server uses this code to get the Access
+Token and the Refresh Token, and then response with the Access Token and Refresh
+Token set in a HttpOnly Cookie.
+
+Then, on the Spotify API, you would take the token out from the Token Cookie and
+use them to authorize the request. Mission accomplished.
+
+Now, this intermediate server is another point of failure in the system. This
+server comes with a plethora of its own security and availability concerns. It
+would take some effort to get this server running; it's not just an empty
+server, it has the logic to do the Google OAuth token exchange, which is usually
+done through some kind of Google OAuth SDK.
+
+And you must also have the authority to modify the Spotify API, which if you
+don't have consent to do, then this plan can go into the bin.
+
+As an added bonus, the Spotify app on Android or iOS doesn't have Cookie, so the
+Spotify API now has to fallback to the normal way. Is this an effort or not?
+
+### Conclusion
+
+... mentions the mobile api thing
+
+---
+
 ## To be researched
 
-- [ ] Storing JWT in httpOnly cookie
+- [x] Storing JWT in httpOnly cookie
 
-  - Can XSS exploit/still use this?
+  - Can XSS exploit/still use this? - Yes.
   - The attacker doesn't know the JWT, but can use them while XSS-ing. What
     happens when the attacker knows the JWT, like in the case of localStorage?
+
+    Turns out, nothing. If it's a bank then it takes 1 request to get all your
+    money. There's little need for token leakage when they can just use them
+    immediately.
 
 - [ ] HTTP Basic Auth? Bearer?
 
@@ -38,17 +445,20 @@ OAuth 2.0:
 
 - [x] How can Refresh Token provide seamless experience?
 - [x] Implicit Flow?
-- [ ] Content Security Policy (XSS mitigation)
 - [x] Why "Backend for Frontend" architecture needs PKCE?
       [link](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-browser-based-apps#section-6.2)
-- [ ] OAuth 2.1?
-- [ ] Is `state` has a role of CSRF prevention when using PCKE?
+- [x] Is `state` has a role of CSRF prevention when using PCKE?
 - [x] OpenID Connect
 - [x] Many reasons why the Refresh Token expires?
-- [ ] Maybe OAuth provides some very important reasons why storing tokens in
-      localStorage is OK? (Refresh Token Rotation, ...)
 - [x] Why does the Redirect URL in the Authorization Request and the Access
-  Token request have to match?
+      Token request have to match?
+- [x] Content Security Policy (XSS mitigation)
+- [x] Maybe OAuth provides some very important reasons why storing tokens in
+      localStorage is OK? (Refresh Token Rotation, ...)
+
+Additional OAuth researching:
+
+- [ ] OAuth 2.1?
 - [ ] OAuth client authentication (client_id, client_secret, jwt?)
 - [ ] Client Credentials for APIs to access its own resource?
 - [ ] Seems like OAuth services have SDKs to handle refresh token. Look at some.
@@ -591,3 +1001,163 @@ work.
 If strict matching is enforced, then the malicious `redirect_uri` would not have
 been approved and this wouldn't be a problem. Sometimes the strict matching
 implementation is faulty, so this `redirect_uri` matching exists as a fallback.
+
+---
+
+Q: Is `state` has a role of CSRF prevention when using PCKE?
+
+A: No. Quote from OAuth 2.0 Security Best Current Practice:
+[link](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-security-topics#section-2.1)
+
+> Clients MUST prevent Cross-Site Request Forgery (CSRF). In this context, CSRF
+> refers to requests to the redirection endpoint that do not originate at the
+> authorization server, but a malicious third party (see Section 4.4.1.8. of
+> [RFC6819] for details). Clients that have ensured that the authorization
+> server supports PKCE [RFC7636] MAY rely the CSRF protection provided by PKCE.
+> In OpenID Connect flows, the nonce parameter provides CSRF protection.
+> Otherwise, one- time use CSRF tokens carried in the state parameter that are
+> securely bound to the user agent MUST be used for CSRF protection (see Section
+> 4.7.1).
+
+---
+
+Q: Why storing tokens in `localStorage` when using OAuth is OK
+
+A:
+
+The defenders of `httpOnly` Cookie says that it's for protecting the token, so
+that "it is not so easy to store the token and then later on perform malicious
+requests". That's the only argument that I could hear.
+
+Consider using just an Access Token and no Refresh Token, and the Access Token
+has a not-short lifetime (because using short-lived AT and no RT is a little too
+much re-login). If this AT were to be leaked, either the victim realizes and
+reports to the Authorization Server to invalidate the token, or the attacker has
+access until the AT expires.
+
+Storing the AT in `httpOnly` Cookie does prevent scripts from reading the
+literal token, but the attacker doesn't have to know the token in order to make
+requests. If Facebook has an XSS vulnerability, the attacker is guaranteed to be
+able to post using crafted HTTP request, no matter how the token is stored: If
+the token is stored in localStorage, then it's easy to get; if it's stored in a
+`httpOnly` Cookie, then it's even easier, just send the request and the Cookie
+will be sent along by the browser.
+
+Yeah, they don't know the literal access token. However, they don't need to.
+Remember that the assumption is that we are under an XSS attack. Let's bump the
+severity (and classicality) a bit: If a Banking website has an XSS
+vulnerability, is the choice between `localStorage` or `httpOnly` Cookie matter?
+
+_(Please ignore any 2FA in today's banking systems, because if every HTTP
+request in a normal website also has 2FA then it's unrealistic, not to mention
+using `localStorage` is "suddenly becoming feasible".)_
+
+That's right. It's an **one-off** attack. They just need access once and once
+only to send all of your money to them.
+
+Now let's bump back down to Facebook. By the time the leaked access token is
+expired, Facebook should have fixed the XSS vulnerability already. Using
+`httpOnly` Cookie is only "useful" until the XSS vulnerability is fixed, which
+is usually a small time window, providing that you care about your service. Even
+then, the attacker doesn't need to obtain the literal Access Token. Each time
+the user opens up Facebook, the attacker makes various requests (sending malware
+private messages, advertisements, sharing posts, posting malware, ...) and
+that's enough damage per victim for them (and they have millions). What do they
+need after that? Facebook still has XSS, and there's still more occasions to do
+damage in the future if they want.
+
+Okay, sure. Supposedly they save that for later use, because fixing XSS could
+take a month, and the access token expires after 1 month.
+
+Let's meet OAuth 2.0.
+
+Jumping to the current best practice, we have a short-lived Access Token and
+long-lived Refresh Token.
+
+The obvious question/argument is that, if the Refresh Token is leaked, then the
+attacker can still obtain Access Tokens and have access, why bother with Refresh
+Token?
+
+If you have **not** ask this question before implementing Refresh Token then you
+are overengineering your system. The choice between `localStorage` or `httpOnly`
+Cookie is irrelevant to you. If you did, then good, you probably have the
+answer.
+
+Every time a Refresh Token is used, it's immediately invalidated along with all
+previous Access Tokens, and a new Refresh Token is issued. This is called
+Refresh Token Rotation. Old Access Tokens are invalidated; any attempt to use
+invalidated Refresh Token and the entire AT+RT associated with the account is
+immediately invalidated, requiring a re-login. Without Refresh Token Rotation,
+implementing Refresh Token is an overengineering effort that solves nothing.
+
+**This Refresh Token Rotation thing will provide a protection layer when the
+Refresh Token is leaked. Compare to just using a not-short-lived Access Token,
+this is an improvement, since the Access Token is now very short-lived.**
+
+Now, with this approach, if the Access Token is leaked, then it's available for
+like 10 minutes. What would the attacker do in 10 minutes? Is what they want
+achievable for 5 seconds while they have XSS access to the website? **Stealing
+Access Token that lives 30 days makes sense, but stealing one that lives 10
+minutes does not.**
+
+So the only remaining concerns is Refresh Token leakage.
+
+If the Refresh Token is leaked instead and used at least once, then when the
+victim's browser make a request, they are using the old Access Token. Well, that
+might expires, so they requests a new one using the **old** Refresh Token.
+That's when the Authorization Server invalidates all tokens.
+
+Supposing that the Refresh Token is leaked and the user will never make any
+request again, and the attacker has access for a very, very long time. Can't get
+more worse than this. Now, how is it leaked? Via XSS, right? When the XSS is
+fixed, then the website's developer does what? That's right, invalidating all
+tokens of all accounts on their website, requiring a re-login again. That's once
+in a blue moon, so don't question the feasibility of that wiping action, it's
+possible and is the correct measure to fix the problem.
+
+**Is `httpOnly` Cookie helps in this ultimate scenario?**
+
+Considering Facebook. If there's a constant re-login then this is a sign of an
+XSS attack, and the victim should realize that their account is compromised and
+reports to the developer. They might even see that their Facebook inbox suddenly
+has a lot of angry responses.
+
+Let's consider another extreme: Your website has 1 user (you),
+the Refresh Token is leaked, and you'll never visit that site or make any
+authorized HTTP request again. Well first of all, that service should not be
+exposed to the internet. Then, the fact that you'll never (or very occasionally)
+use that service says a lot about your decision using that service in the first
+place, and please just **Revoke Access** on the Authorization Server after doing
+your thing. **Then**, I hope you realize that your website has XSS; if the
+leaked Refresh Token lasts 1 year (yes, Refresh Token has the absolute expire
+date, the time that it must die), you should have fixed XSS or you should not
+maintain your service at all. How, you ask?
+
+If you just please visit your service every month, you would be presented with a
+re-login, which you should not see, that could tell you something. Just to be
+sure, or if your browser's storage is wiped, visit your Authorization Server's
+website, they should have a section telling you that the leaked Refresh Token is
+last used while you're not using them, and you'd know you f'ed up. Usually a
+Refresh Token is associated with a device, something like "iPhone XR, last used
+5 minutes ago" on Facebook or Google (remember, Facebook or Google's
+**Authorization Server**, not the Facebook or Google service).
+
+Fine. If you'd never have a way to discover that your website is having XSS
+vulnerability (god bless you), or you will never visit the Authorization
+Server's website to check your Refresh Tokens' usage, or you use that service
+maybe once a year, then go ahead and implement `httpOnly` Cookie to hide the
+token. **And probably shut down your service too, because it's insecure and no
+one cares.**
+
+**One, if you don't have XSS then `httpOnly` Cookie solves nothing. Two, the
+earliness of the discovery of XSS (i.e. your service f'ed up) is independent of
+the choice between `localStorage` or `httpOnly` Cookie for token storage. That
+depends on your victim's urgency to report\*. Using `localStorage` could even
+allow for easier attack, and you would know you f'ed up sooner. Why? Because if
+you want to have XSS for 2 years instead of 30 minutes then go 'head.**
+
+\* Before you argue, it's the victim who should know that their account is
+compromised and your website is f'ed, not you, the developer. If the victim
+don't realize that their account is compromised, then they probably don't care
+if your service is f'ed. If they do, you'd probably face a bankruptcy so you
+would know immediately.
