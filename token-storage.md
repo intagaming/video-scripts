@@ -1,24 +1,4 @@
-# Token storage
-
-## Chapters
-
-1. How client-side apps authenticate with APIs
-1. localStorage - the hated one
-1. Cookie is taking all of the cookies
-1. Vulnerabilities
-1. Cookie's double the trouble
-1. Mending XSS
-1. localStorage all the way... or is it?
-1. Introducing OAuth. "That's not how it's supposed to work."
-1. Authorization Code flow
-1. Refresh token
-1. Refresh token rotation
-1. Why you can use localStorage when using OAuth
-
-"localStorage all the way... or is it?" -> This talks about the problem with
-JWT. Is was not intended for security.
-
-- Seems like this topic is out of scope of this video.
+# Where to store Tokens on the Browser, with debate
 
 ## Script
 
