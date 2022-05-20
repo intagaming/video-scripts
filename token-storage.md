@@ -4,24 +4,23 @@
 
 ### How client-side apps authenticate with APIs
 
-Here is the Facebook app, and here is the Facebook API.
+Here's the Facebook app, and here's the Facebook API.
 
-How do the Facebook app communicates with the Facebook API?
+How does the Facebook app communicates with the Facebook API?
 
-When you post something, how does the Facebook API knows that it is **you**, who
+When you post something, how does the Facebook API know that it is **you**, who
 has **this name**?
 
 Usually, for a client-side application to communicate with an API, the
 client-side app would need a permission to access data. In its most primitive
 form, the user would enter the username and password, they get sent to the API,
 and the API gives back "the permission to access the user data". It's like a
-key, and it has a name, it's called a Token, specifically, Access Token.
+key, and it has a name, it's called a Token, specifically, an Access Token.
 
-Using this token, the client-side app could access and modify the data via the
-API. This token represents the permission that the user gave the client-side app
-to access and modify the user's data.
+This token represents the permission that the user gave the client-side app to
+access and modify their data.
 
-For example, you logged into Facebook. Facebook API gives you back an Access
+For example, you logged into Facebook. The Facebook API gives you back an Access
 Token that represents **you**. The Facebook app would use this token to post and
 comment as **you**.
 
@@ -36,9 +35,9 @@ be somewhat similar.
 
 ### localStorage - the hated one
 
-I'll briefly show you the sources where storing tokens in localStorage is
-recommended. But I'm not going to rely on these sources for my answer, because
-they don't consider any alternatives. I do, so I explain it my own way.
+I'll briefly show you the sources where storing tokens in localStorage are
+recommended. But I'm not gonna rely on these sources for my answer, because they
+don't consider any alternatives. I do, so I'll explain it my own way.
 
 _shows the sources_
 
@@ -58,11 +57,9 @@ But there exists another place to store the Access Token.
 Also on the web is the idea of "Cookies". A Cookie is a piece of data that the
 web server would save on the browser.
 
-_inserts Cookie saving to the browser upon receiving the response_
-
 Back to the Primitive flow. After you enter your username and password, instead
-of sending back to you the Token, the web server would store the Token in a
-Cookie, and let the browser hold that for you.
+of sending you back the Token, the web server would store the Token in a Cookie,
+and let the browser hold that for you.
 
 It sounds just like localStorage, but the client-side application don't have to
 write logics to store or send the token. For example if Facebook was to store
@@ -70,26 +67,26 @@ the Token in a Cookie, then Facebook don't have to write code to send the token
 along with the requests; the Browser would do that automatically.
 
 The Browser only sends the Cookie to the Facebook API, so you don't have to
-worry it going to some malicious place.
+worry about it going to some malicious places.
 
 So, why is there two ways of accomplishing the same thing?
 
 ### Vulnerabilities: XSS
 
 To access and modify the data in localStorage, you use JavaScript. It's the
-language that runs what you call client-side applications on the web.
+language that runs what you call the client-side applications on the web.
 
 The first vulnerability that we care about is called Cross-Site Scripting, or
 XSS. Basically, it's when there is a piece of malicious JavaScript running on
 the website. This malicious script can do a lot of things. One of the things
 that they can do is accessing localStorage and send the token back to the
-attacker to use.
+attacker.
 
 That's the reason why there is another place to store the token, Cookie.
 
-Remember that Cookies are data that are stored on the browser, just like
+Recall that Cookies are data that are stored on the browser, just like
 localStorage? It can even be accessed via JavaScript. There is a catch: if a
-Cookie is flagged `HttpOnly`, then it cannot be accessed by using JavaScript.
+Cookie is flagged `HttpOnly`, then it cannot be accessed using JavaScript.
 
 When Facebook makes a request, the browser sends along the `HttpOnly` Cookie,
 and the request is approved.
@@ -104,7 +101,7 @@ Cross-Site Request Forgery, or CSRF, is an attack that revolves around Cookie.
 For example, if you visit a malicious website, that website could "forge" a
 request that resembles your Facebook posting request, and send that malicious
 request to the Facebook API. If your browser sends along the Cookie that
-contains the Access Token, then you will post something that you don't want.
+contains the Access Token, then you'll post something that you don't want.
 
 Fortunately, there's a protection coming from the Browser, which is the
 `SameSite` Cookie flag. When the malicious site makes a request, the request is
@@ -113,7 +110,7 @@ is set to something like `Lax`, the Cookie won't be send by the Browser. There's
 multiple catches that is not important right now. If you want to dig deeper,
 take a look at the MDN documentation.
 
-The important thing is, `SameSite` can mitigate the CSRF attack.
+The important thing is, `SameSite` can mitigate CSRF attacks.
 
 So, Cookie can protect your token from XSS and CSRF. Or is it?
 
@@ -126,26 +123,29 @@ According to OWASP's Cheatsheet:
 
 So if your website has an XSS vulnerability, then your CSRF mitigation will not
 work. That would make your Token Cookie to be sent along with the malicious
-request before.
+request that I described just a short moment ago.
 
 But how?
 
 It's simple. The XSS vulnerability allows malicious scripts to run on the
 infected website. Let's assume Facebook has an XSS vulnerability. This malicious
 script would send the malicious posting request to Facebook like before. But
-`SameSite=Lax`, which is the CSRF mitigation measure, now doesn't work, because
-the request is made from the legit Facebook website. So, the Token Cookie is
-sent along with the request, and you posted an unwanted post.
+because the request is made from the legit Facebook website, `SameSite=Lax` is
+now sort of unrelated because there is no Cross-Site Request Forgery going on
+here. The malicious request looks exactly like a legit request, so the Token
+Cookie is sent along, and you posted an unwanted post.
 
 See, the attacker doesn't need to know the exact Token. They can still make
 malicious requests if Facebook has XSS.
 
-Cookie is supposed to mitigate XSS, and true, the data in the Cookie is not
-exposed, but the Cookie can still be used nonetheless.
+There is a Portswigger lab that exploits XSS to perform CSRF, I'll link it in
+the description if you want to take a look.
+
+https://portswigger.net/web-security/cross-site-scripting/exploiting/lab-perform-csrf
 
 Therefore, although using localStorage requires you to mitigate XSS, Cookie in
-the other hands requires you to mitigate both XSS **and** CSRF. Two
-vulnerability is worse than one, right?
+the other hands requires you to mitigate both XSS **and** CSRF. You don't have
+to prevent CSRF if you don't have to, right?
 
 ### Defending `HttpOnly` Cookie
 
@@ -160,7 +160,7 @@ To understand how the world's doing this Token storage thing, you have to
 understand a real example. The Facebook example used until now is a hypothetical
 one. I don't know exactly how Facebook stores tokens on your browser, but I
 would comfortably say that if they were to follow the industry standard, then
-the answer is, 9 out of 10 times, localStorage, unless they have a very
+the answer is, 9 times out of 10, localStorage, unless they have a very
 compelling reason not to. I'll show you why.
 
 ### OAuth
@@ -184,44 +184,46 @@ So, when you're entering your username and password, you are **authenticating**
 yourself to Google, saying that "Here is my account, and I own it. Now log me
 in." Google, in OAuth's terms, is known as the Authorization Service.
 
-Let's introduce another service, YouTube. You log in your Google account to use
-YouTube. You **authorize** YouTube to access your YouTube data, but not the
+Let's introduce another service, YouTube. You log into your Google account to
+use YouTube. You **authorize** YouTube to access your YouTube data, but not the
 Gmail data. Similarly, you only authorize Google Calendar to manage calendar,
 not uploading videos to YouTube. YouTube, in OAuth's terms, is known as the
 Client, as in the Client of the Google Authorization Server.
 
-When using third party applications like Spotify, if you wish to login to
-Spotify using a Google account, you would authenticate yourself to the
-Authorization Server (in this case, Google), and there will be a screen for you
-to grant authorizations to Spotify, or in other words, saying what Spotify can
-do with your Google account.
+When signing-in a third party application with a Google Account, for example
+Spotify, you would authenticate yourself to the Authorization Server (in this
+case, Google), and there will be a screen for you to grant authorizations to
+Spotify, or in other words, saying what Spotify can do with your Google account.
+Some apps might not care about your Google data, so they don't ask for
+permissions explicitly, thus after logging in or selecting your account, you're
+just redirected back immediately.
 
 [...]
 
 Then, after authenticating with Google and authorizing for the Spotify app about
 what Google data it can access, you will be redirected back to Spotify. In the
 background, Spotify receives a code from Google, called Authorization Code.
-Spotify uses this Code, sends it to Google, and get back an Access Token. The
-OAuth flow is complete.
+Spotify uses this Code, sends it to Google, and gets back an Access Token. The
+OAuth flow is now complete.
 
-This OAuth flow is called the Authorization Code flow. I will be releasing
-another video talking about OAuth and how it works (trust me I've got a lot to
-tell about OAuth), but for now just get a basic idea of OAuth.
+This OAuth flow is called the Authorization Code flow. I'll be releasing another
+video talking about OAuth and how it works (trust me I've got a lot to tell
+about OAuth), but for now just get a basic idea of OAuth.
 
 ### Refresh Token
 
-So, there is this thing in OAuth that you might have heard before, and that's a
-Refresh Token.
+You may have heard this term somewhere before, it's called Refresh Token.
 
-Remember that after you login you would receive an Access Token? It had a
-not-short lifetime. Why is it not-short? Because you don't want your user to
-login again every 10 minutes, don't you? So it might be set to 7 days, or 30
-days, depending on the service.
+Remember that after you login you'd receive an Access Token? It must have an
+expiration date because if it leaks, it would grant permanent access to anyone
+who possesses that token. And, it had a not-short lifetime. Why is it not-short?
+Because you don't want your user to login again every 10 minutes, don't you? So
+it might be set to 7 days, or 30 days, depending on the service.
 
 Now, OAuth presents this Refresh Token term, that refers to the token that you
 would use to get a new Access Token when it expires. If your 30-day Access Token
 expires, you can use your Refresh Token to get a new one that lasts another 30
-days. But that's not why it's invented to solve.
+days. But that's not what it's invented to solve.
 
 When you log in, you will be issued an Access Token and a Refresh Token. The
 Access Token will be valid for a very short time, and the Refresh Token will be
@@ -229,10 +231,14 @@ long lived. Why? Because if your Access Token gets leaked, it would only be
 usable for a short amount of time, minimizing the effect of the Access Token
 leakage.
 
-But what if the Refresh Token is leaked instead? Isn't that would mean the
+But what if the Refresh Token gets leaked instead? Isn't that would mean the
 attacker now has infinite access to your account?
 
 ### Refresh Token Rotation
+
+Here's an OAuth flow that involves getting a new Access Token.
+
+Let's tweak this.
 
 Every time a Refresh Token is used, it is immediately invalidated, and the
 Authorization Server gives you back a new Access Token **and** a new Refresh
@@ -247,17 +253,9 @@ Token to get a new Access Token. But, in doing so, that leaked Refresh Token is
 invalidated, and guess who is still using that invalidated Refresh Token? That's
 right, your browser.
 
-So, the Refresh Token gets leaked and get used by an attacker. You visit
-Facebook, and Facebook uses the Access Token to get your news feed. The Access
-Token might only live for 30 minutes and it's probably already past that point,
-so Facebook uses the leaked Refresh Token to get a new Access Token. However,
-that leaked Refresh Token has already been invalidated, so every tokens
-associated with your account would be invalidated, including every tokens that
-the attacker had. You are then required to log in again.
-
 This is called Refresh Token Rotation. It is a measure to log everybody out when
-a Refresh Token is leaked. You could say that it helps to reduce the damage if
-the Refresh Token is to be leaked.
+a Refresh Token is leaked. You could say that it **helps to reduce the damage**
+if the Refresh Token is to be leaked.
 
 If you (and by "you" I mean the Authorization Server like Google, **and** also
 **you** as a Google Authorization Server user) are using short-lived Access
@@ -272,20 +270,20 @@ browser?
 
 ### OAuth and token storage
 
-Let's assume you are the developer of a service like Spotify.
+Let's assume that you are the developer of Spotify.
 
-If a user of your service is a victim of a token leakage, chances are your
+If an user of your service is a victim of a token leakage, chances are your
 service's website has an XSS vulnerability that has caused the tokens to be
 leaked.
 
-As I've proved to you, the attacker don't have to know the tokens in order to
-use them. If the attacker has XSS attacked your service (Spotify), they could
-rename the victim's playlist names to something malicious, or delete their
-playlists, all without knowing the tokens.
+As I've proved to you, the attacker doesn't have to know the tokens in order to
+use them. Suppose the attacker decides to exploit the XSS vulnerability of your
+service, they could rename the victim's playlist names to something malicious,
+or delete their playlists, all without knowing the tokens.
 
 Let's say your service is Facebook instead. They could send malicious messages
-to all of the victim's friends immediately, without snatching the token and send it
-somewhere. The damage is done immediately.
+to all of the victim's friends immediately, without snatching the token and send
+it somewhere. The damage is done immediately.
 
 XSS's malicious scripts can only be run when the browser is running. That's
 true, but next time the victim visits Facebook, the XSS vulnerability is still
@@ -299,82 +297,77 @@ Refresh Token to their email or machine or server somewhere.
 The access token is only available for a short time, so the attacker, if they
 want to maintain access to the victim's account, has to use the Refresh Token to
 obtain a new Access Token. That means the leaked Refresh Token is now
-invalidated. Now if the victim opens up the browser and visits Facebook, they
-would see that they are logged out, and at the same time, the attacker has also
-lost access to the victim's account.
+invalidated. Now if the victim opens up their browser and visits Facebook, they
+would be logged out, and at the same time, the attacker also loses access to the
+victim's account, 'cause all of the tokens are invalidated.
 
-What if the victim never opens up their browser and visits Facebook?
+What if the victim never opens up their browser and visits Facebook? What if
+they lose their device, or somehow deleted their tokens locally?
 
-In that case, the attacker would have access to the victim's account for a very
-long time. Remember that you are the developer of Facebook, **not** the victim,
-so you rely on the victim to report to you about the attack. If the victim
-doesn't log in and realizes that their inboxes are now flooded with angry
-responses to the malicious messages, then you, the developer, has **no idea**
-that your service, Facebook, is f'ed.
+In that case, sure, the attacker would have access to the victim's account for a
+very long time. But remember that you are the developer of Facebook, **not** the
+victim, so you **rely** on the victim to let you know about the attack. If the
+victim doesn't log in and realize that their inbox are now flooded with angry
+responses to the malicious messages, then you, the developer, would have **no
+idea** that your service, Facebook, is f'ed.
 
 Just don't care about the "store tokens where" question at the moment. The fact
 that your service Facebook is f'ed is more important. And would you (the
 developer of Facebook) wish to know that your service is f'ed after 30 minutes
-or after a year? 'cause the thing is, if you just let the victim's token leaked,
-then it's easier to attack and you would know that your service, Facebook, is
-f'ed sooner.
+or after a year? 'cause the thing is, if you just let the victim's token gets
+leaked, then it's easier to attack and you would know that your service,
+Facebook, is f'ed sooner.
 
-You may say "If the attacker has access to a very famous person on Facebook, and
-they just sit and sniff that influencer's inbox, then I, the developer, as well
-as the influencer wouldn't know that their account is compromised, right? Were I
-to have used HttpOnly Cookie, the attacker would not have access to the
-influencer's account all day everyday, correct?"
+First off, (and everybody should absolutely do this), immediately after they
+abandoned their device, or in other words abandoned their Refresh Token, they
+should check their "Devices" page, which looks like this.
 
-Answer:
+If the leaked Access Token or Refresh Token is used, then it would show their
+abandoned device name, along with something like "5 mins ago". What they should
+do next is revoke access to that old Device, even if it's not been used
+recently, which in turn invalidating all Access Tokens & Refresh Tokens that the
+attacker might get hold of.
 
-Remember Refresh Token Rotation? After the access token expires, if the attacker
-were to use the leaked Refresh Token, **and** if the influencer still cares
-about their Facebook inbox and opens up their browser, then their account is
-logged out immediately. Well what if they don't, for example they switched
-laptop and don't have the leaked Refresh Token anymore?
-
-First off, immediately after abandoning their device, they should check their
-"Devices" page, which looks like this. If the leaked Access Token or Refresh
-Token is used, then it would show something like "Windows 10, 5 mins ago". What
-they should do next is revoke access to that old Device, even if it has not been
-used recently, which in turn invalidating all Access Tokens & Refresh Tokens
-that the attacker might get hold of.
-
-If there's nothing wrong going on with their account (like their account
+Well, if there's nothing wrong going on with their account (like their account
 suddenly sending malicious messages), then they would assume that the "5 mins
-ago" part is a machine error and wouldn't report to you, the developer.
+ago" part is a machine error and wouldn't report it to you, the developer.
 
 To be fair, little people actually care enough to go to that Devices page, so
 there's another way, which is wait for the damage to arrive.
 
-If the attacker is just sitting observe the inbox and doesn't actually do any
-damage then that's really dumb of them, right? They should sell the information
-to some interested party, right? Then when the damage is done, the influencer
-would sue the Facebook company for leaking inbox data, after that you'd
-definitely know that you're f'ed. Would this be preventable have you used
-HttpOnly Cookie to store the tokens? Your service, Facebook, still has an XSS
-vulnerability, and it's very unlikely that there are no damage being done via
-that XSS vulnerability after a year. It's even less likely that every victim
-just switch laptop and lost their Refresh Token.
+If the attacker is just sitting to observe the inbox and doesn't actually do any
+damage then that's really dumb of them, right? At some point they must sell the
+information to some interested party. Then when the damage is done, the
+victim/influencer would sue the Facebook company for leaking inbox data, after
+that you'd definitely know that you're f'ed. Would this be preventable have you
+used HttpOnly Cookie to store the tokens? Your service, Facebook, still has an
+XSS vulnerability, and it's very unlikely that there are no damage being done
+via that XSS vulnerability. It's even less likely that every victim just switch
+laptop and lost their Refresh Token.
 
 If you, the developer of Facebook, think that:
 
 1. It takes a very long time for you to know that your service has XSS (which is
-   very unlikely if you care about your service)
+   very unlikely if you care about XSS at all)
 2. In the case XSS attacks happen and tokens get leaked, the Refresh Token
-   Rotation protection system doesn't help to let you - the developer - know
-   that your service is f'ed
-3. There are attacks against your service that the attacker is interested in
-   doing that involves knowing the Access Token or Refresh Token
+   Rotation system doesn't help to let you - the developer - know that your
+   service is f'ed
+3. There are specific attacks against your service that the attacker is
+   interested in doing that involves knowing the literal Access Token or Refresh
+   Token
 
-Then go ahead and use HttpOnly Cookie by all means. But did you know that you
-are not the person who can change the code of the Google Authorization Server?
-If you want to set a Cookie on the user's Browser, then the Cookie (in this
-case, the Token Cookie) must be set when the user's browser asks Google for an
-Access Token. Google doesn't do that. You can't change that response, so you're
-left with using some kind of intermediate server to be able to do that. In fact,
-if you insist, let's dig in deeper to see what you need to do in order to
-implement this intermediate server.
+Then go ahead and use HttpOnly Cookie by all means.
+
+But did you know that you are not the person who can change the code of the
+Google Authorization Server? If you want to set a Cookie on the user's Browser,
+then the Cookie (in this case, the Token Cookie) must be set when the user's
+browser asks Google for an Access Token. Google doesn't do that. You can't
+change that response, so you **must** use some kind of intermediate server to be
+able to do that. You heard it right, you **must**. At this point, you should
+already realize that something is wrong, as the OAuth flow does not mention this
+middle-guy server anywhere. In fact, if you insist that this is a possible
+solution, let's actually dig deeper to see what you need to do in order to
+implement "the solution".
 
 ### HttpOnly Cookie's implementation with Google OAuth
 
@@ -388,25 +381,29 @@ After the Authorization Code flow is complete, when the Google OAuth redirects
 the user back to Spotify with the Authorization Code, Spotify would send this
 code to the intermediate server. This server uses this code to get the Access
 Token and the Refresh Token, and then response with the Access Token and Refresh
-Token set in a HttpOnly Cookie.
+Token set in some HttpOnly Cookies, which would now be saved on the user's
+browser.
 
-Then, on the Spotify API, you would take the token out from the Token Cookie and
-use them to authorize the request. Mission accomplished, simple enough.
+Then, on the Spotify API, each time the user sends in a request, you would take
+the token out from the Token Cookie and use them to authorize the request.
+Mission accomplished, simple enough.
 
-Now, using this intermediate server is kinda an anti pattern, because the
+Now, using this intermediate server is kind of an anti pattern, because the
 Authorization Code flow that's used for your Spotify app is supposed to be
-between the Public Client (the Spotify app on your browser) and Google, but now
-another party is also getting involved. And if you know OAuth, you would also
-know that the Refresh Token is strictly only allowed to be exchanged between the
-Client and the Authorization Server, so that's not good. But you insisted to use
-Cookie anyway, right?
+between the Public Client (the Spotify app on your browser) and Google, the
+Authorization Server, but now another party is also getting involved. And if you
+know OAuth, you would also know that the Refresh Token is strictly only allowed
+to be exchanged between the Client and the Authorization Server, so that's not
+good. But you insisted to use Cookie anyway, right?
 
 And if you don't have the authority to modify the Spotify API **or** your
-service Spotify uses any third party API that don't support Cookie and requires
-the Google access token explicitly, then this plan can go into the bin.
+service Spotify uses any third party API that doesn't support Cookie and
+requires the Google Access Token explicitly, then this plan and/or the thinking
+of using HttpOnly Cookie can go into the bin.
 
 As an added bonus, the Spotify app on Android or iOS doesn't have Cookie, so the
-Spotify API now has to fallback to the normal way. Is this an effort or no?
+Spotify API now has to fallback to the normal way. Is this an effort or no? You
+tell me.
 
 ### Conclusion
 
